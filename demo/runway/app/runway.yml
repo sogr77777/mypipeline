@@ -1,0 +1,21 @@
+# Order that modules will be deployed. A module will be skipped if a
+# corresponding env/config file is not present in its directory.
+# (e.g., for cfn modules, if a dev-us-west-2.env file is not in the 'app.cfn'
+# directory when running a dev deployment of 'app' to us-west-2 then it will be
+# skipped.)
+deployments:
+  - current_dir: yes
+    regions:
+      - eu-central-1
+      # - us-east-2
+    #assume-role:
+      # When running multiple deployments, post_deploy_env_revert can be used
+      # to revert the AWS credentials in the environment to their previous
+      # values
+      # post_deploy_env_revert: true
+      #arn: arn:aws:iam::988101568216:user/pete.bird@wnco.com
+      #arn: arn:aws:iam::account-id:role/role-name
+
+# If using environment folders instead of git branches, git branch lookup can
+# be disabled entirely (see "Repo Structure")
+ignore_git_branch: false

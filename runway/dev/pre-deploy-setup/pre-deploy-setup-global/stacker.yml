@@ -1,0 +1,39 @@
+# Note namespace/stacker_bucket_name being substituted from the environment
+# namespace: ${namespace}
+stacker_bucket: ''
+namespace: bax-${environment}-${appname}-rw-setup
+
+sys_path: ./custom_hooks/
+
+post_build:
+  - path: custom.termprotection
+    required: true
+    data_key: termprotection
+    args:
+      stacks:
+        - "bax-${environment}-${appname}-rw-setup-instance-profile"
+      regions:
+        - ${region}
+
+common_tags: &common_tags
+  Name: ${appname}
+  Env: ${environment}
+  Appname: ${appname}
+  Appid: ${appid}
+  Owner: ${owner}
+  Costcenter: ${costcenter}
+  CentrifyRole: ${centrifyrole}
+  CentrifyZone: ${centrifyzone}
+  CentrifyComputerGroup: ${centrifycomputergroup}
+
+
+stacks:
+  instance-profile:
+    template_path: templates/instance-profile.yaml
+    tags:
+      <<: *common_tags
+
+    variables:
+      Env: ${environment}
+      Appname: ${appname}
+      SupportedRegions: ${region}

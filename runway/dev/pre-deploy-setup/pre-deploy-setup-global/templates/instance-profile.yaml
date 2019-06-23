@@ -1,0 +1,285 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Creates team specific roles and policies
+Parameters:
+  Env:
+    Description: The name of the environment being deployed to.
+    Type: String
+  Appname:
+    Description: Name of the application roles are supporting
+    Type: String
+  SupportedRegions:
+    Description: A comma separated list of the currently supported regions.
+    Type: String
+
+# Name
+# Costcenter
+# Env
+# Owner
+# Appname
+# Appid
+
+Resources:
+  teamAdminRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: 'Allow'
+            Principal:
+              Federated: !Join ['', ['arn:aws:iam::', !Ref "AWS::AccountId", ':saml-provider/adfs-sts.baxter.com']]
+            Action: ['sts:AssumeRoleWithSAML']
+            Condition:
+              StringEquals:
+                SAML:aud: ['https://signin.aws.amazon.com/saml']
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+
+      ManagedPolicyArns:
+        - Ref: teamAdminAccessPolicy
+        - !Join ['', ['arn:aws:iam::', !Ref "AWS::AccountId", ':policy/bax-', !Ref Env, '-kms-usage-policy']]
+        - !Join ['', ['arn:aws:iam::', !Ref "AWS::AccountId", ':policy/bax-', !Ref Env, '-cloudtrail-read-policy']]
+        - !Join ['', ['arn:aws:iam::', !Ref "AWS::AccountId", ':policy/bax-', !Ref Env, '-deny-policy']]
+      RoleName: !Join ['-', ['baxaws', !Ref Env, !Ref Appname, 'admin-role']]
+
+  teamSupportRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: 'Allow'
+            Principal:
+              Federated: !Join ['', ['arn:aws:iam::', !Ref "AWS::AccountId", ':saml-provider/adfs-sts.baxter.com']]
+            Action: ['sts:AssumeRoleWithSAML']
+            Condition:
+              StringEquals:
+                SAML:aud: ['https://signin.aws.amazon.com/saml']
+      ManagedPolicyArns:
+        - Ref: teamSupportAccessPolicy
+        - !Join ['', ['arn:aws:iam::', !Ref "AWS::AccountId", ':policy/bax-', !Ref Env, '-support-management-policy']]
+        - !Join ['', ['arn:aws:iam::', !Ref "AWS::AccountId", ':policy/bax-', !Ref Env, '-cloudtrail-read-policy']]
+        - !Join ['', ['arn:aws:iam::', !Ref "AWS::AccountId", ':policy/bax-', !Ref Env, '-deny-policy']]
+      RoleName: !Join ['-', ['baxaws', !Ref Env, !Ref Appname, 'support-role']]
+
+  teamViewerRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: 'Allow'
+            Principal:
+              Federated: !Join ['', ['arn:aws:iam::', !Ref "AWS::AccountId", ':saml-provider/adfs-sts.baxter.com']]
+            Action: ['sts:AssumeRoleWithSAML']
+            Condition:
+              StringEquals:
+                SAML:aud: ['https://signin.aws.amazon.com/saml']
+      ManagedPolicyArns:
+        - !Join ['', ['arn:aws:iam::', !Ref "AWS::AccountId", ':policy/bax-', !Ref Env, '-cloudtrail-read-policy']]
+        - !Join ['', ['arn:aws:iam::', !Ref "AWS::AccountId", ':policy/bax-', !Ref Env, '-deny-policy']]
+      RoleName: !Join ['-', ['baxaws', !Ref Env, !Ref Appname, 'viewer-role']]
+
+  teamAdminAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Join ['-', ['bax', !Ref Env, !Ref Appname, 'admin-policy']]
+      Description: Provides a user with EC2 functionality.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Sid: CommonServices
+            Action:
+              - elasticloadbalancing:*
+              - autoscaling:*
+              - ec2:*
+              - cloudformation:*
+              - s3:*
+              - cloudwatch:*
+              - kms:*
+              - lambda:*
+              - batch:*
+              - rds:*
+              - ssm:*
+              - iam:AddRoleToInstanceProfile
+              - iam:RemoveRoleFromInstanceProfile
+              - iam:ListInstanceProfiles
+              - iam:ListInstanceProfilesForRole
+              - iam:CreateInstanceProfile
+              - iam:GetInstanceProfile
+              - iam:GetRole
+              - ec2:CreateTags
+              - iam:PassRole
+              - iam:AttachRolePolicy
+              - iam:DetachRolePolicy
+              - iam:GetRolePolicy
+              - iam:ListRoles
+              - iam:ListRolePolicies
+              - iam:ListPolicies
+              - iam:GetPolicy
+              - iam:ListAttachedRolePolicies
+              - iam:UpdateAssumeRolePolicy
+              - iam:PutRolePolicy
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - sts:AssumeRole
+            Resource: !Join ['', ['arn:aws:iam::143049391535:role/baxaws-dev-' , !Ref Appname, 'admin-role']]
+
+  teamSupportAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Join ['-', ['bax', !Ref Env, !Ref Appname, 'support-policy']]
+      Description: Provides users with full access to the commonly used services.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Sid: ServiceFullAccess
+            Action:
+              - elasticloadbalancing:*
+              - autoscaling:*
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - ec2:stopinstance
+              - ec2:rebootinstances
+              - ec2:createsnapshot
+              - ec2:attachvolume
+              - ec2:authorizesecuritygroupingress
+              - ec2:authorizesecuritygroupegress
+              - ec2:describevolumes
+              - ec2:describeinstances
+              - ec2:describesnapshots
+            Condition:
+              StringEquals:
+                'aws:RequestTag/Appname': !Ref Appname
+            Resource: "*"
+  RoleServer:
+    Type: 'AWS::IAM::Role'
+    DependsOn: PolicyServer
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - Ref: PolicyServer
+      RoleName: !Join
+        - '-'
+        - - baxaws
+          - !Ref Env
+          - !Ref Appname
+          - 'server-ec2-role'
+  ProfileServer:
+    Type: "AWS::IAM::InstanceProfile"
+    DependsOn: RoleServer
+    Properties:
+      Path: '/'
+      Roles:
+        - Ref: RoleServer
+      InstanceProfileName: !Join
+        - '-'
+        - - baxaws
+          - !Ref Env
+          - !Ref Appname
+          - 'server-ec2-role'
+  PolicyServer:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      ManagedPolicyName: !Join
+        - '-'
+        - - bax
+          - !Ref Env
+          - !Ref Appname
+          - 'server-ec2-policy'
+      Description: Policy for instance app Role
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Sid: SSMActionsFromEC2Instances
+            Action:
+              - 'ssm:Describe*'
+              - 'ssm:GetDocument'
+              - 'ssm:GetManifest'
+              - 'ssm:GetParameters'
+              - 'ssm:GetParameter'
+              - 'ssm:List*'
+              - 'ssm:PutInventory'
+              - 'ssm:PutComplianceItems'
+              - 'ssm:PutConfigurePackageResult'
+              - 'ssm:UpdateAssociationStatus'
+              - 'ssm:UpdateInstanceAssociationStatus'
+              - 'ssm:UpdateInstanceInformation'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'ec2messages:AcknowledgeMessage'
+              - 'ec2messages:DeleteMessage'
+              - 'ec2messages:FailMessage'
+              - 'ec2messages:GetEndpoint'
+              - 'ec2messages:GetMessages'
+              - 'ec2messages:SendReply'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'cloudwatch:PutMetricData'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'ec2:DescribeInstances'
+              - 'ec2:DescribeInstanceStatus'
+              - 'ec2:TerminateInstances'
+              - 'ec2:DescribeTags'
+              - 'ec2:CreateTags'
+              - 'elasticloadbalancing:AddListenerCertificates'
+              - 'elasticloadbalancing:CreateListener'
+              - 'elasticloadbalancing:CreateRule'
+              - 'elasticloadbalancing:DeleteRule'
+              - 'elasticloadbalancing:DeregisterInstancesFromLoadBalancer'
+              - 'elasticloadbalancing:DescribeListeners'
+              - 'elasticloadbalancing:DescribeRules'
+              - 'elasticloadbalancing:ModifyRule'
+              - 'elasticloadbalancing:RegisterInstancesWithLoadBalancer'
+              - 'autoscaling:SetInstanceHealth'
+              - 'sns:publish'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:DescribeLogGroups'
+              - 'logs:DescribeLogStreams'
+              - 'logs:PutLogEvents'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'kms:Decrypt'
+            Resource:
+              - arn:aws:kms:eu-central-1:143049391535:key/6e9d855c-799b-43ed-b260-af2329546608
+              - arn:aws:kms:us-east-2:143049391535:key/40003a3d-fec9-44df-a65a-819b0fdc1ff2
+          - Effect: Allow
+            Action:
+              - 's3:PutObject'
+              - 's3:HeadBucket'
+              - 's3:GetObject'
+              - 's3:AbortMultipartUpload'
+              - 's3:ListMultipartUploadParts'
+              - 's3:ListBucket'
+              - 's3:ListBucketMultipartUploads'
+            Resource: 'arn:aws:s3:::*'

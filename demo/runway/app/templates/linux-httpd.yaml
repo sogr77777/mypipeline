@@ -1,0 +1,196 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create ASG for an application
+
+Parameters:
+  InstanceType:
+    Type: String
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+  Subnets:
+    Type: CommaDelimitedList
+  SecurityGroups:
+    Type: CommaDelimitedList
+  AMI:
+    Type: String
+  InstanceProfile:
+    Type: String
+  VpcId:
+    Type: String
+  CNAMEAlias:
+    Type: String
+  LoadBalancer:
+    Type: String
+  InfobloxLambda:
+    Type: String
+  LoadBalancerDNS:
+    Type: String
+  ListenerDeleteLambda:
+    Type: String
+  ServerName:
+    Type: String
+  NumberOfServers: 
+    Type: String
+  WebFilesBucket:
+    Type: String
+
+# Name
+# Costcenter
+# Env
+# Owner
+# Appname
+# Appid
+
+Resources:
+  LaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /tmp/configure-target-group.sh:
+              content: |
+                #!/bin/bash
+                #
+                LOAD_BALANCER_ARN=$1
+                REGION=$2
+                HOSTNAME=$3
+                TARGET_GROUP_ARN=$4
+                #
+                declare -a PORT_INFO_ARRAY=("443&${TARGET_GROUP_ARN}")
+                if [[ $(aws elbv2 describe-listeners --load-balancer-arn ${LOAD_BALANCER_ARN}  --region ${REGION} --query "Listeners | length(@)") == 0 ]]; then
+                    for PORT_INFO in "${PORT_INFO_ARRAY[@]}"; do
+                        TG=$(echo ${PORT_INFO} | cut -d "&" -f2)
+                        PORT=$(echo ${PORT_INFO} | cut -d "&" -f1)
+                        LISTENER_ARN=$(aws elbv2 create-listener --load-balancer-arn ${LOAD_BALANCER_ARN} --protocol HTTPS --port ${PORT} --default-actions Type=forward,TargetGroupArn=${TG} --query "Listeners[].ListenerArn" --output text --region ${REGION} --certificates CertificateArn=arn:aws:acm:us-east-2:143049391535:certificate/1704505a-a020-4e1f-8f57-1b0d14663c1f)
+                        aws elbv2 create-rule --listener-arn ${LISTENER_ARN} --priority 1 --region ${REGION} --conditions Field=host-header,Values=${HOSTNAME} --actions Type=forward,TargetGroupArn=${TG}
+                    done
+                else
+                    for LISTENER_ARN in $(aws elbv2 describe-listeners --load-balancer-arn ${LOAD_BALANCER_ARN}  --region ${REGION} --query "Listeners[].ListenerArn" --output text); do
+                        for RULE in $(aws elbv2 describe-rules --listener-arn ${LISTENER_ARN} --region ${REGION} --query "Rules[?Conditions[0].Values[0] == '${HOSTNAME}'].RuleArn" --output text); do
+                            aws elbv2 delete-rule --rule-arn ${RULE} --region ${REGION}
+                        done
+                        ## Find correct priority
+                        FOUND_PRIORITY="no"
+                        NEW_RULE_PRIORITY=1
+                        while [ $FOUND_PRIORITY == "no" ]; do
+                            FOUND_PRIORITY="yes"
+                            for RULE_PRIORITY in $(aws elbv2 describe-rules --listener-arn ${LISTENER_ARN} --region ${REGION} --query "Rules[].Priority" --output text); do
+                                if [[ $RULE_PRIORITY == $NEW_RULE_PRIORITY ]]; then
+                                    FOUND_PRIORITY="no"
+                                    NEW_RULE_PRIORITY=$(($RULE_PRIORITY + 1))
+                                fi
+                            done
+                        done
+                        LISTENER_PORT=$(aws elbv2 describe-listeners --listener-arns ${LISTENER_ARN} --region ${REGION} --query "Listeners[0].Port" --output text)
+                        TARGET_GROUP_ARN=""
+                        for PORT_INFO in "${PORT_INFO_ARRAY[@]}"; do
+                            PORT=$(echo ${PORT_INFO} | cut -d "&" -f1)
+                            if [[ $PORT == $LISTENER_PORT ]]; then
+                                TARGET_GROUP_ARN=$(echo ${PORT_INFO} | cut -d "&" -f2)
+                            fi
+                        done
+                        aws elbv2 create-rule --listener-arn ${LISTENER_ARN} --priority ${NEW_RULE_PRIORITY} --region ${REGION} --conditions Field=host-header,Values=${HOSTNAME} --actions Type=forward,TargetGroupArn=${TARGET_GROUP_ARN}
+                    done
+                fi
+              mode: '000755'
+              owner: root
+              group: root
+            /tmp/execute-configure-target-group.sh:
+              content:
+                Fn::Sub: |
+                  #!/bin/bash
+                  LOAD_BALANCER_ARN=${LoadBalancer}
+                  REGION=${AWS::Region}
+                  CNAME=${CNAMEAlias}.aws.baxter.com
+                  TARGET_GROUP=${TargetGroup}
+                  # Execute script
+                  cd /tmp
+                  chmod +x configure-target-group.sh
+                  ./configure-target-group.sh $LOAD_BALANCER_ARN $REGION $CNAME $TARGET_GROUP
+              mode: '000755'
+              owner: root
+              group: root
+          commands:
+            00_ConfigureTargetGroup:
+              command: /tmp/execute-configure-target-group.sh
+              ignoreErrors: "true"
+    Properties:
+      AssociatePublicIpAddress: false
+      ImageId: !Ref AMI
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyPairName
+      SecurityGroups: !Ref SecurityGroups
+      IamInstanceProfile: !Ref InstanceProfile
+      UserData:
+        Fn::Base64:
+          Fn::Sub: |
+            #!/bin/bash
+            #
+            # Initialize the instance
+            /bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchConfiguration --region ${AWS::Region} || error_exit 'Failed to run cfn-init.'
+            # Download web files and start web server
+            service httpd start
+            service firewalld stop
+            aws s3 cp s3://${WebFilesBucket}/linux/ /var/www/html/ --recursive
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: !Ref Subnets
+      TargetGroupARNs:
+        - !Ref TargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 1200
+      LaunchConfigurationName: !Ref LaunchConfiguration
+      MinSize: !Ref NumberOfServers
+      MaxSize: !Ref NumberOfServers
+      DesiredCapacity: !Ref NumberOfServers
+      Tags:
+        - Key: Name
+          Value: !Ref ServerName
+          PropagateAtLaunch: 'true'
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: "/healthcheck.html"
+      HealthCheckPort: 80
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 4
+      Matcher:
+        HttpCode: '200'
+      Port: 80
+      Protocol: HTTPS
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '20'
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+
+  InfobloxDns:
+    Type: "Custom::DNSCname"
+    Version: "1.0"
+    Properties:
+      ServiceToken: !Ref InfobloxLambda
+      RequestAction: Create
+      RequestType: "CNAME"
+      ResourceProperties:
+        Cname: !Sub ${CNAMEAlias}.aws.baxter.com
+        ResourceCname: !Ref LoadBalancerDNS
+
+  DeleteListener:
+    Type: "Custom::DeleteListener"
+    DependsOn:
+      - TargetGroup
+    Version: "1.0"
+    Properties:
+      ServiceToken: !Ref ListenerDeleteLambda
+      ResourceProperties:
+        DNS: !Sub ${CNAMEAlias}.aws.baxter.com
+        LoadBalancer: !Ref LoadBalancer
+
+Outputs:
+  Url:
+    Value: !Sub https://${CNAMEAlias}.aws.baxter.com

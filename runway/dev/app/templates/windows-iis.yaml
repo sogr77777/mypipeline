@@ -1,0 +1,179 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create ASG for an application
+
+Parameters:
+  InstanceType:
+    Type: String
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+  Subnets:
+    Type: CommaDelimitedList
+  SecurityGroups:
+    Type: CommaDelimitedList
+  AMI:
+    Type: String
+  InstanceProfile:
+    Type: String
+  VpcId:
+    Type: String
+  CNAMEAlias:
+    Type: String
+  LoadBalancer:
+    Type: String
+  InfobloxLambda:
+    Type: String
+  LoadBalancerDNS:
+    Type: String
+  ListenerDeleteLambda:
+    Type: String
+  ServerName:
+    Type: String
+  NumberOfServers:
+    Type: String
+  WebFilesBucket:
+    Type: String
+
+# Name
+# Costcenter
+# Env
+# Owner
+# Appname
+# Appid
+
+Resources:
+  LaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            C:\tmp\configure-target-group.ps1:
+              content: |
+                $LOAD_BALANCER_ARN=$args[0]
+                $REGION=$args[1]
+                $HOSTNAME=$args[2]
+                $TARGET_GROUP_ARN=$args[3]
+                #
+                Foreach ($LISTENER_ARN in (Get-ELB2Listener -LoadBalancerArn arn:aws:elasticloadbalancing:eu-central-1:143049391535:loadbalancer/app/bax-dev-ALB-1NAHK7GI06Y5Z/e4ac913e4025faf5 -region eu-central-1).ListenerArn) {
+                  Foreach ($RULE in (Get-ELB2Rule -ListenerArn $LISTENER_ARN -region eu-central-1)) {
+                    if ($RULE.Conditions.Values -eq $HOSTNAME) {
+                      Remove-ELB2Rule -RuleArn $RULE.RuleArn -region eu-central-1
+                    }
+                  }
+                  ## Find correct priority
+                  $FOUND_PRIORITY="no"
+                  $NEW_RULE_PRIORITY=1
+                  do {
+                    Foreach ($RULE_PRIORITY in (Get-ELB2Rule -ListenerArn $LISTENER_ARN -region eu-central-1).Priority) {
+                      $FOUND_PRIORITY="yes"
+                      if ($RULE_PRIORITY -eq $NEW_RULE_PRIORITY) {
+                          $FOUND_PRIORITY="no"
+                          $NEW_RULE_PRIORITY=[int]$RULE_PRIORITY + 1
+                      }
+                    }
+                  } While ("$FOUND_PRIORITY" -eq "no")
+                  New-ELB2Rule -ListenerArn $LISTENER_ARN -Action @{Type='forward';TargetGroupArn="$TARGET_GROUP_ARN"} -Condition @{Field='host-header';Values="$HOSTNAME"} -Priority $NEW_RULE_PRIORITY -Force
+                }
+              mode: '000755'
+              owner: root
+              group: root
+            C:\tmp\execute-configure-target-group.ps1:
+              content:
+                Fn::Sub: |
+                  $LOAD_BALANCER_ARN="${LoadBalancer}"
+                  $REGION="${AWS::Region}"
+                  $CNAME="${CNAMEAlias}.aws.baxter.com"
+                  $TARGET_GROUP="${TargetGroup}"
+                  # Execute script
+                  cd C:\tmp
+                  .\configure-target-group.ps1 "$LOAD_BALANCER_ARN" "$REGION" "$CNAME" "$TARGET_GROUP"
+              mode: '000755'
+              owner: root
+              group: root
+          commands:
+            00_ConfigureTargetGroup:
+              command: "Invoke-Expression C:\\tmp\\execute-configure-target-group.ps1"
+              ignoreErrors: "true"
+    Properties:
+      AssociatePublicIpAddress: false
+      ImageId: !Ref AMI
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyPairName
+      SecurityGroups: !Ref SecurityGroups
+      IamInstanceProfile: !Ref InstanceProfile
+      UserData:
+        Fn::Base64:
+          Fn::Sub: |
+            <powershell>
+            # Trigger cfn-init
+            cfn-init.exe -v --stack ${AWS::StackName} --resource LaunchConfiguration --region ${AWS::Region}
+            # Download website
+            $objects = Get-S3Object -BucketName ${WebFilesBucket} -KeyPrefix /windows/
+            foreach($object in $objects) {
+              $localFile = $object.Key -replace "windows/", "C:\inetpub\wwwroot\"
+              Copy-S3Object -BucketName ${WebFilesBucket} -Key $object.Key -LocalFile $localFile
+            }
+            </powershell>
+
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: !Ref Subnets
+      TargetGroupARNs:
+        - !Ref TargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 1200
+      LaunchConfigurationName: !Ref LaunchConfiguration
+      MinSize: !Ref NumberOfServers
+      MaxSize: !Ref NumberOfServers
+      DesiredCapacity: !Ref NumberOfServers
+      Tags:
+        - Key: Name
+          Value: !Ref ServerName
+          PropagateAtLaunch: 'true'
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: "/healthcheck.html"
+      HealthCheckPort: 80
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 4
+      Matcher:
+        HttpCode: '200'
+      Port: 80
+      Protocol: HTTPS
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '20'
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+
+  InfobloxDns:
+    Type: "Custom::DNSCname"
+    Version: "1.0"
+    Properties:
+      ServiceToken: !Ref InfobloxLambda
+      RequestAction: Create
+      RequestType: "CNAME"
+      ResourceProperties:
+        Cname: !Sub ${CNAMEAlias}.aws.baxter.com
+        ResourceCname: !Ref LoadBalancerDNS
+
+  DeleteListener:
+    Type: "Custom::DeleteListener"
+    DependsOn:
+      - TargetGroup
+    Version: "1.0"
+    Properties:
+      ServiceToken: !Ref ListenerDeleteLambda
+      ResourceProperties:
+        DNS: !Sub ${CNAMEAlias}.aws.baxter.com
+        LoadBalancer: !Ref LoadBalancer
+
+Outputs:
+  Url:
+    Value: !Sub https://${CNAMEAlias}.aws.baxter.com

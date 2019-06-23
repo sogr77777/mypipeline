@@ -1,0 +1,95 @@
+{
+  "variables": {
+    "aws_user": "ec2-user",
+    "aws_instance_type": "t2.large",
+    "ami_name": "{{env `BUILD_NUMBER`}}",
+    "aws_ami_id": "{{env `AMIID`}}",
+    "aws_ami_name": "{{env `AMI_NAME`}}",
+    "aws_region": "{{env `REGION`}}",
+    "aws_instance_iam_profile": "",
+    "aws_subnet_id": "{{env `SUBNET`}}",
+    "aws_security_group_id": "{{env `SECURITY_GROUPS`}}",
+    "AWS_BUILD_NUMBER": "{{env `BUILD_NUMBER`}}",
+    "Appname": "{{env `APPNAME_TAG`}}",
+    "Costcenter": "{{env `COSTCENTER_TAG`}}",
+    "Appid": "{{env `APPID_TAG`}}",
+    "Env": "{{env `ENV_TAG`}}",
+    "Owner": "{{env `OWNER_TAG`}}",
+    "NameTag": "Packer Builder - Example"
+  },
+  "builders": [
+    {
+      "access_key": "{{user `aws_access_key`}}",
+      "ami_name": "{{user `aws_ami_name`}}-{{isotime \"2006-01-02\"}}_{{user `AWS_BUILD_NUMBER`}}",
+      "associate_public_ip_address": false,
+      "communicator": "winrm",
+      "instance_type": "{{user `aws_instance_type`}}",
+      "user_data_file":"scripts/packer-win-userdata.txt",
+      "winrm_username": "Administrator",
+      "winrm_port": 5985,
+      "winrm_timeout": "15m",
+      "region": "{{user `aws_region`}}",
+      "secret_key": "{{user `aws_secret_key`}}",
+      "security_group_id": "{{user `aws_security_group_id`}}",
+      "source_ami": "{{user `aws_ami_id`}}",
+      "subnet_id": "{{user `aws_subnet_id`}}",
+      "type": "amazon-ebs",
+      "encrypt_boot": false,
+      "run_tags": {
+        "Name": "{{user `NameTag`}}",
+        "Appname": "{{user `Appname`}}",
+        "Costcenter": "{{user `Costcenter`}}",
+        "Appid": "{{user `Appid`}}",
+        "Env": "{{user `Env`}}",
+        "Owner": "{{user `Owner`}}"
+      },
+      "run_volume_tags": {
+        "Appname": "{{user `Appname`}}",
+        "Costcenter": "{{user `Costcenter`}}",
+        "Appid": "{{user `Appid`}}",
+        "Env": "{{user `Env`}}",
+        "Owner": "{{user `Owner`}}"
+      },
+      "tags": {
+        "Appname": "{{user `Appname`}}",
+        "Costcenter": "{{user `Costcenter`}}",
+        "Appid": "{{user `Appid`}}",
+        "Env": "{{user `Env`}}",
+        "Owner": "{{user `Owner`}}"
+      }
+    }
+  ],
+  "provisioners": [
+    {
+      "type": "file",
+      "source": "scripts/inspec",
+      "destination": "C:/tmp/"
+    },
+    {
+      "type": "powershell",
+      "scripts": [
+        "scripts/installs.ps1"
+      ]
+    },
+    {
+      "type": "powershell",
+      "inline": [
+        "echo running InSpec unit testing ...",
+        "inspec exec C:/tmp/inspec"
+      ]
+    },
+    {
+      "type": "powershell",
+      "scripts": [
+        "scripts/sysprep.ps1"
+      ]
+    }
+    
+  ],
+  "post-processors": [
+    {
+      "type": "manifest",
+      "output": "manifest.json"
+    }
+  ]
+}

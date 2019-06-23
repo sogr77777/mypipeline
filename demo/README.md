@@ -1,0 +1,1 @@
+The demo folder is used only for training. If you are copying this repo as a starting point for you app please feel free to delete the demo folder.

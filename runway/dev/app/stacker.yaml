@@ -1,0 +1,91 @@
+# Note namespace/stacker_bucket_name being substituted from the environment
+# namespace: ${namespace}
+stacker_bucket: ''
+namespace: bax-${environment}-${appname}-rw
+
+sys_path: ./custom_hooks/
+
+pre_build:
+  - path: custom.upload
+    required: true
+    data_key: linux
+    args:
+      bucket: ${bucketname}
+      destination: "linux/"
+      local_directory: "./web-files/linux/"
+      region: ${region}
+  - path: custom.upload
+    required: true
+    data_key: windows
+    args:
+      bucket: ${bucketname}
+      destination: "windows/"
+      local_directory: "./web-files/windows/"
+      region: ${region}
+
+post_build:
+  - path: custom.termprotection
+    required: true
+    data_key: termprotection
+    args:
+      stacks:
+        - "bax-${environment}-${appname}-rw-linux"
+        - "bax-${environment}-${appname}-rw-windows"
+      regions:
+        - us-east-2
+        - eu-central-1
+
+common_tags: &common_tags
+  Name: ${appname}
+  Env: ${environment}
+  Appname: ${appname}
+  Appid: ${appid}
+  Owner: ${owner}
+  Costcenter: ${costcenter}
+  CentrifyRole: ${centrifyrole}
+  CentrifyZone: ${centrifyzone}
+  CentrifyComputerGroup: ${centrifycomputergroup}
+
+common_params: &common_params
+  InstanceProfile: ${instanceprofile}
+  KeyPairName: ${keypair}
+  Subnets: ${subnets}
+  VpcId: ${vpcid}
+  WebFilesBucket: ${bucketname}
+
+stacks:
+  linux:
+    template_path: templates/linux-httpd.yaml
+    tags:
+      <<: *common_tags
+
+    variables:
+      <<: *common_params
+      AMI: ${linuxami}
+      CNAMEAlias: ${linuxalias}
+      InfobloxLambda: ${xref bax-infoblox-lambda-api-app::lambdaarn}
+      InstanceType: ${linuxinstancetype}
+      ListenerDeleteLambda: ${xref bax-${environment}-devops-tools-delete-listener::lambda}
+      LoadBalancer: ${xref bax-${environment}-${appname}-rw-infra-alb::loadbalancer}
+      LoadBalancerDNS: ${xref bax-${environment}-${appname}-rw-infra-alb::loadbalancerdns}
+      NumberOfServers: ${linuxnumofserver}
+      SecurityGroups: ${xref bax-${environment}-${appname}-rw-setup-security-groups::linuxsg}
+      ServerName: ${linuxservername}
+
+  windows:
+    template_path: templates/windows-iis.yaml
+    tags:
+      <<: *common_tags
+
+    variables:
+      <<: *common_params
+      AMI: ${windowsami}
+      CNAMEAlias: ${windowsalias}
+      InfobloxLambda: ${xref bax-infoblox-lambda-api-app::lambdaarn}
+      InstanceType: ${windowsinstancetype}
+      ListenerDeleteLambda: ${xref bax-${environment}-devops-tools-delete-listener::lambda}
+      LoadBalancer: ${xref bax-${environment}-${appname}-rw-infra-alb::loadbalancer}
+      LoadBalancerDNS: ${xref bax-${environment}-${appname}-rw-infra-alb::loadbalancerdns}
+      NumberOfServers: ${windowsnumofserver}
+      SecurityGroups: ${xref bax-${environment}-${appname}-rw-setup-security-groups::windowssg}
+      ServerName: ${windowsservername}

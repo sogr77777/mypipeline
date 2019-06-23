@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Creates paramater store placeholders for application values
+
+# This template is to set the standard for paramater store values for AMIs
+# The AMI created will create the new key each time by adding the month
+# Name
+# Costcenter
+# Env
+# Owner
+# Appname
+# Appid
+
+Resources:
+  # /example/ami/windows/server2016/2018/03
+  # /example/ami/linux/RHEL7.4/2018/03
+  LinuxAMI:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      # /example/ami/linux/RHEL7.4/2018/03
+      # Contains the year/month at the end
+      Name: "/example/ami/linux/RHEL7.4/latest"
+      Type: "String"
+      Value: "placeholder"
+      Description: "example Linux AMI"
+
+  WindowsAMI:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      # /example/ami/windows/server2016/2018/03
+      # Contains the year/month at the end
+      Name: "/example/ami/windows/server2016/latest"
+      Type: "String"
+      Value: "placeholder"
+      Description: "example Windows AMI"
+
+
+  #Cloudformation does not support SecureString
+  #ScriptLoginPassword:
+  #  Type: "AWS::SSM::Parameter"
+  #  Properties:
+  #    Name: "/example/app/adminuser/password"
+  #    Type: "SecureString"
+  #    Value: "placeholder"
+  #    Description: "Password used in the AMI creation process"

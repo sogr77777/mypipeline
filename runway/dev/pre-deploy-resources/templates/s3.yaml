@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Create an S3 bucket
+Parameters:
+  Env:
+    Description: The name of the environment being deployed to.
+    Type: String
+    Default: dev
+  Appname:
+    Description: Name of the application roles are supporting
+    Type: String
+    Default: example
+  KMSKeyId:
+    Description: KMS key to encrypt the bucket with
+    Type: String
+
+# Name
+# Costcenter
+# Env
+# Owner
+# Appname
+# Appid
+
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    #DeletionPolicy: Retain
+    Properties:
+      BucketName: !Join ["-", ["bax", !Ref Env, !Ref Appname, !Ref "AWS::Region"]]
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref KMSKeyId
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Statement:
+          - Action: ['s3:*']
+            Effect: Deny
+            Resource:
+              - !Join ['', ['arn:aws:s3:::', !Ref 'S3Bucket']]
+              - !Join ['', ['arn:aws:s3:::', !Ref 'S3Bucket', "/*"]]
+            Principal: "*"
+            Condition:
+              Bool:
+                'aws:SecureTransport':
+                  - false
+          - Action: ['s3:PutObject']
+            Effect: Deny
+            Resource:
+              - !Join ['', ['arn:aws:s3:::', !Ref 'S3Bucket']]
+              - !Join ['', ['arn:aws:s3:::', !Ref 'S3Bucket', "/*"]]
+            Principal: "*"
+            Condition:
+              StringNotEquals:
+                's3:x-amz-server-side-encryption-aws-kms-key-id':
+                  - !Ref KMSKeyId
+              Bool:
+                's3:x-amz-server-side-encryption':
+                  - true

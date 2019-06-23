@@ -1,0 +1,159 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Creates Application Security Groups.'
+
+Parameters:
+  VPCID:
+    Type: String
+    Description: 'VPC ID'
+  WindowsSGName:
+    Type: String
+  LinuxSGName:
+    Type: String
+  LoadbalancerSGName:
+    Type: String
+  Env:
+    Type: String
+    Default: Dev
+  Appname:
+    Type: String
+    Default: example
+
+# Name
+# Costcenter
+# Env
+# Owner
+# Appname
+# Appid
+
+Resources:
+  WindowsSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Join ['', ['bax-', !Ref Env, !Ref Appname, '-windows-sg']]
+      GroupDescription: !Join ['', [!Ref Appname, 'windows SG']]
+      VpcId: !Ref VPCID
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: "10.0.0.0/8"
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: "172.16.0.0/12"
+        - IpProtocol: tcp
+          FromPort: '443'
+          ToPort: '443'
+          CidrIp: "10.0.0.0/8"
+        - IpProtocol: tcp
+          FromPort: '443'
+          ToPort: '443'
+          CidrIp: "172.16.0.0/12"
+        - IpProtocol: tcp
+          FromPort: '3389'
+          ToPort: '3389'
+          CidrIp: "10.0.0.0/8"
+        - IpProtocol: tcp
+          FromPort: '3389'
+          ToPort: '3389'
+          CidrIp: "172.16.0.0/12"
+        - IpProtocol: icmp
+          FromPort: '-1'
+          ToPort: '-1'
+          CidrIp: "172.16.0.0/12"
+        - IpProtocol: icmp
+          FromPort: '-1'
+          ToPort: '-1'
+          CidrIp: "10.0.0.0/8"
+
+      Tags:
+        - Key: Name
+          Value: !Ref WindowsSGName
+
+  LinuxSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Join ['', ['bax-', !Ref Env, !Ref Appname, '-linux-sg']]
+      GroupDescription: !Join ['', [!Ref Appname, 'linux SG']]
+      VpcId: !Ref VPCID
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: "172.16.0.0/12"
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: "10.0.0.0/8"
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: "172.16.0.0/12"
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: "10.0.0.0/8"
+        - IpProtocol: tcp
+          FromPort: '443'
+          ToPort: '443'
+          CidrIp: "10.0.0.0/8"
+        - IpProtocol: tcp
+          FromPort: '443'
+          ToPort: '443'
+          CidrIp: "172.16.0.0/12"
+        - IpProtocol: icmp
+          FromPort: '-1'
+          ToPort: '-1'
+          CidrIp: "172.16.0.0/12"
+        - IpProtocol: icmp
+          FromPort: '-1'
+          ToPort: '-1'
+          CidrIp: "10.0.0.0/8"
+
+      Tags:
+        - Key: Name
+          Value: !Ref LinuxSGName
+
+  LoadbalancerSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Join ['', ['bax-', !Ref Env, !Ref Appname, '-alb-sg']]
+      GroupDescription: !Join ['', [!Ref Appname, 'alb SG']]
+      VpcId: !Ref VPCID
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: "172.16.0.0/12"
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: "10.0.0.0/8"
+        - IpProtocol: tcp
+          FromPort: '443'
+          ToPort: '443'
+          CidrIp: "10.0.0.0/8"
+        - IpProtocol: tcp
+          FromPort: '443'
+          ToPort: '443'
+          CidrIp: "172.16.0.0/12"
+        - IpProtocol: icmp
+          FromPort: '-1'
+          ToPort: '-1'
+          CidrIp: "172.16.0.0/12"
+        - IpProtocol: icmp
+          FromPort: '-1'
+          ToPort: '-1'
+          CidrIp: "10.0.0.0/8"
+
+      Tags:
+        - Key: Name
+          Value: !Ref LoadbalancerSGName
+
+Outputs:
+  loadbalancersg:
+    Value: !Ref LoadbalancerSg
+  linuxsg:
+    Value: !Ref LinuxSg
+  windowssg:
+    Value: !Ref WindowsSg

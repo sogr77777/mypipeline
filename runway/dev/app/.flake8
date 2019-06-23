@@ -1,0 +1,8 @@
+# http://flake8.pycqa.org/en/3.1.1/manpage.html?highlight=append-config
+# https://github.com/onicagroup/runway/blob/master/runway/templates/.flake8
+[flake8]
+ignore = 
+    E722
+    E501
+    D103
+    W292

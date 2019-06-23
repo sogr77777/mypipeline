@@ -1,0 +1,116 @@
+{
+  "variables": {
+    "aws_user": "ec2-user",
+    "aws_instance_type": "t2.medium",
+    "ami_name": "{{env `BUILD_NUMBER`}}",
+    "aws_ami_id": "{{env `AMIID`}}",
+    "aws_ami_name": "{{env `AMI_NAME`}}",
+    "aws_region": "{{env `REGION`}}",
+    "aws_instance_iam_profile": "",
+    "aws_subnet_id": "{{env `SUBNET`}}",
+    "aws_security_group_id": "{{env `SECURITY_GROUPS`}}",
+    "AWS_BUILD_NUMBER": "{{env `BUILD_NUMBER`}}",
+    "Appname": "{{env `APPNAME_TAG`}}",
+    "Costcenter": "{{env `COSTCENTER_TAG`}}",
+    "Appid": "{{env `APPID_TAG`}}",
+    "Env": "{{env `ENV_TAG`}}",
+    "Owner": "{{env `OWNER_TAG`}}",
+    "NameTag": "Packer Builder - Example"
+  },
+  "builders": [
+    {
+      "ami_name": "{{user `aws_ami_name`}}-{{isotime \"2006-01-02\"}}_{{user `AWS_BUILD_NUMBER`}}",
+      "associate_public_ip_address": false,
+      "communicator": "ssh",
+      "instance_type": "{{user `aws_instance_type`}}",
+      "region": "{{user `aws_region`}}",
+      "security_group_id": "{{user `aws_security_group_id`}}",
+      "source_ami": "{{user `aws_ami_id`}}",
+      "ssh_username": "{{user `aws_user`}}",
+      "subnet_id": "{{user `aws_subnet_id`}}",
+      "ssh_interface": "private_ip",
+      "type": "amazon-ebs",
+      "encrypt_boot": false,
+      "run_tags": {
+        "Name": "{{user `NameTag`}}",
+        "Appname": "{{user `Appname`}}",
+        "Costcenter": "{{user `Costcenter`}}",
+        "Appid": "{{user `Appid`}}",
+        "Env": "{{user `Env`}}",
+        "Owner": "{{user `Owner`}}"
+      },
+      "run_volume_tags": {
+        "Appname": "{{user `Appname`}}",
+        "Costcenter": "{{user `Costcenter`}}",
+        "Appid": "{{user `Appid`}}",
+        "Env": "{{user `Env`}}",
+        "Owner": "{{user `Owner`}}"
+      },
+      "tags": {
+        "Appname": "{{user `Appname`}}",
+        "Costcenter": "{{user `Costcenter`}}",
+        "Appid": "{{user `Appid`}}",
+        "Env": "{{user `Env`}}",
+        "Owner": "{{user `Owner`}}"
+      },
+      "launch_block_device_mappings": [
+        {
+          "device_name": "/dev/xvdb",
+          "encrypted": false,
+          "volume_size": "100",
+          "volume_type": "gp2",
+          "delete_on_termination": true
+        },
+        {
+          "device_name": "/dev/xvds",
+          "encrypted": false,
+          "volume_size": "60",
+          "volume_type": "gp2",
+          "delete_on_termination": true
+          }
+      ]
+    }
+  ],
+  "provisioners": [
+    {
+    	"type": "file",
+    	"source": "scripts/diskconfig.sh",
+    	"destination": "/tmp/diskconfig.sh"
+    },
+    {
+      "type": "file",
+      "source": "scripts/inspec",
+      "destination": "/tmp/"
+    },
+    {
+    	"type": "shell",
+    	"inline": [
+        "echo launching disk config scripts",
+        "sudo chmod +x /tmp/diskconfig.sh",
+        "sudo /tmp/diskconfig.sh",
+        "echo launching install scripts",
+        "sudo yum install wget httpd -y",
+        "sudo wget https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm",
+        "sudo rpm -ivh epel-release-latest-7.noarch.rpm",
+        "sudo yum -y install python-pip",
+        "sudo pip install awscli --upgrade --user",
+        "sudo yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm",
+        "echo installing inspec ...",
+        "sudo yum install -y https://packages.chef.io/files/stable/inspec/2.1.30/el/7/inspec-2.1.30-1.el7.x86_64.rpm"
+    	]
+    },
+    {
+      "type": "shell",
+      "inline": [
+        "echo running InSpec unit testing ...",
+        "inspec exec /tmp/inspec"
+      ]
+    }
+  ],
+  "post-processors": [
+        {
+          "type": "manifest",
+          "output": "manifest.json"
+        }
+      ]
+}

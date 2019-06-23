@@ -1,0 +1,78 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Launches ALB for application
+
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  Subnets:
+    Type: CommaDelimitedList
+  SecurityGroups:
+    Type: CommaDelimitedList
+  TgPort:
+    Type: String
+  TgProtocol:
+    Type: String
+  HealthcheckPath:
+    Type: String
+  SSLCertId:
+    Type: String
+    Default: 'arn:aws:acm:eu-central-1:143049391535:certificate/b1704633-89e3-44c1-81c2-958da2392e55'
+    Description: ARN of the Cert in ACM
+
+# Name
+# Costcenter
+# Env
+# Owner
+# Appname
+# Appid
+
+Resources:
+  ALB:
+    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    Properties:
+      Scheme: 'internal'
+      SecurityGroups: !Ref SecurityGroups
+      Subnets: !Ref Subnets
+      Type: application
+      IpAddressType: ipv4
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckProtocol: !Ref TgProtocol
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 4
+      HealthCheckPath: !Ref HealthcheckPath
+      Matcher:
+        HttpCode: '200'
+      Port: !Ref TgPort
+      Protocol: !Ref TgProtocol
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '20'
+        - Key: stickiness.enabled
+          Value: true
+        - Key: stickiness.lb_cookie.duration_seconds
+          Value: 3600
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref ALB
+      Port: !Ref TgPort
+      Protocol: !Ref TgProtocol
+      Certificates:
+        - CertificateArn: !Ref SSLCertId
+
+Outputs:
+  loadbalancerdns:
+    Value: !GetAtt ALB.DNSName
+  loadbalancer:
+    Value: !Ref ALB
