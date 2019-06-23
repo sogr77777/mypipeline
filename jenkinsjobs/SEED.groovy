@@ -15,8 +15,8 @@ def tooljobs = ['promote-code', 'promote-ami', 'delete-stack-group', 'promote-st
 def appname = 'autorabit'
 
 // Bitbucket credentials and info
-def bitbucketurl = 'https://maov@bitbucket-prod.aws.baxter.com/scm/edp/mypipeline.git'
-def bitbucketcreds = 'maov'
+def bitbucketurl = 'https://sogr77777@github.com/sogr77777/mypipeline'
+def bitbucketcreds = 'sogr77777'
 def branchname = 'master'
 
 // Exceptions - This file will loop through all the arrays and create jobs in all the folders. This array provides exceptions (if any) to not create jobs for
