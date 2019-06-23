@@ -12,7 +12,7 @@ def runwayjobs = ['runway-app', 'runway-pre-deploy-setup', 'runway-pre-deploy-re
 def tooljobs = ['promote-code', 'promote-ami', 'delete-stack-group', 'promote-stack-group']
 
 // app name sets the jenkins folder name
-def appname = 'autorabit'
+def appname = 'mypipeline'
 
 // Bitbucket credentials and info
 def bitbucketurl = 'https://sogr77777@github.com/sogr77777/mypipeline'
