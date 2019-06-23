@@ -118,7 +118,7 @@ stages.each { stage ->
                     }
                 }
 
-                label("${branchname}")
+                // label("${branchname}")
             }
         }
     }
