@@ -1,4 +1,4 @@
-// Define the groovy job definitions here. The seed job will create the jobs below.
+// Define the groovy job definitions is here. The seed job will create the jobs below.
 // Stages will generally correspond to your environments. This repo only exists in dev but yours might look like the string below
 //def stages = ['dev', 'test', 'prod']
 def stages = ['dev']
