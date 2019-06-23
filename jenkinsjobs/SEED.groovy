@@ -59,7 +59,6 @@ stages.each { stage ->
                             scriptPath("jenkinsjobs/${stage}/${amibuilds}.groovy")
                         }
                     }
-
                     label("${branchname}")
                 }
             }
