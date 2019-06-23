@@ -59,7 +59,7 @@ stages.each { stage ->
                             scriptPath("jenkinsjobs/${stage}/${amibuilds}.groovy")
                         }
                     }
-                    label("${branchname}")
+                    // label("${branchname}")
                 }
             }
         }
@@ -89,7 +89,7 @@ stages.each { stage ->
                     }
                 }
 
-                label("${branchname}")
+                // label("${branchname}")
             }
         }
     }
@@ -111,7 +111,7 @@ stages.each { stage ->
                                     url "${bitbucketurl}"
                                     credentials "${bitbucketcreds}"
                                 }
-                                branch "${branchname}"
+                                // branch "${branchname}"
                             }
                         }
                         scriptPath("jenkinsjobs/${stage}/${tools}.groovy")
